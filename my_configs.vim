@@ -7,3 +7,5 @@ let g:ctrlp_working_path_mode = 'cr'
 inoremap jj <Esc>
 " then map escape to nothing
 imap <Esc> <Nop>
+
+set wildignore+=*.class
