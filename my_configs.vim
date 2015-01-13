@@ -4,8 +4,8 @@ colorscheme ir_black
 let g:ctrlp_working_path_mode = 'cr'
 
 " map jj to exit insert mode
-"inoremap jj <Esc>
+inoremap jj <Esc>
 "" then map escape to nothing
-"imap <Esc> <Nop>
+imap <Esc> <Nop>
 
 set wildignore+=*.class
