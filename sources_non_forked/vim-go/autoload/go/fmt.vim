@@ -39,6 +39,10 @@ if !exists('g:go_fmt_options')
     let g:go_fmt_options = ''
 endif
 
+if !exists("g:go_fmt_experimental")
+    let g:go_fmt_experimental = 0
+endif
+
 let s:got_fmt_error = 0
 
 "  we have those problems : 
@@ -57,18 +61,28 @@ function! go#fmt#Format(withGoimport)
     let l:tmpname=tempname()
     call writefile(getline(1,'$'), l:tmpname)
 
-    " save our undo file to be restored after we are done. This is needed to
-    " prevent an additional undo jump due to BufWritePre auto command and also
-    " restore 'redo' history because it's getting being destroyed every
-    " BufWritePre
-    let tmpundofile=tempname()
-    exe 'wundo! ' . tmpundofile
+
+    if g:go_fmt_experimental == 1
+        " save our undo file to be restored after we are done. This is needed to
+        " prevent an additional undo jump due to BufWritePre auto command and also
+        " restore 'redo' history because it's getting being destroyed every
+        " BufWritePre
+        let tmpundofile=tempname()
+        exe 'wundo! ' . tmpundofile
+    endif
 
     " get the command first so we can test it
     let fmt_command = g:go_fmt_command
     if a:withGoimport  == 1 
+        let fmt_command  = g:go_goimports_bin
+    endif
+
+    " if it's something else than gofmt, we need to check the existing of that
+    " binary. For example if it's goimports, let us check if it's installed,
+    " if not the user get's a warning via go#tool#BinPath()
+    if fmt_command != "gofmt"
         " check if the user has installed goimports
-        let bin_path = go#tool#BinPath(g:go_goimports_bin) 
+        let bin_path = go#tool#BinPath(fmt_command) 
         if empty(bin_path) 
             return 
         endif
@@ -81,8 +95,12 @@ function! go#fmt#Format(withGoimport)
 
     " execute our command...
     let out = system(command . " " . l:tmpname)
+    let splitted = split(out, '\n')
 
-    "if there is no error on the temp file, gofmt again our original file
+
+    "if there is no error on the temp file replace the output with the current
+    "file (if this fails, we can always check the outputs first line with:
+    "splitted =~ 'package \w\+')
     if v:shell_error == 0
         " remove undo point caused via BufWritePre
         try | silent undojoin | catch | endtry
@@ -92,8 +110,14 @@ function! go#fmt#Format(withGoimport)
         let default_srr = &srr
         set srr=>%s 
 
-        " execufe gofmt on the current buffer and replace it
-        silent execute "%!" . command
+        "delete everything first from the buffer
+        %delete _  
+
+        " replace with gofmted content
+        call append(0, splitted)
+
+        " delete last line that comes from the append call
+        $delete _  
 
         " only clear quickfix if it was previously set, this prevents closing
         " other quickfixes
@@ -108,7 +132,7 @@ function! go#fmt#Format(withGoimport)
     elseif g:go_fmt_fail_silently == 0 
         "otherwise get the errors and put them to quickfix window
         let errors = []
-        for line in split(out, '\n')
+        for line in splitted
             let tokens = matchlist(line, '^\(.\{-}\):\(\d\+\):\(\d\+\)\s*\(.*\)')
             if !empty(tokens)
                 call add(errors, {"filename": @%,
@@ -128,9 +152,11 @@ function! go#fmt#Format(withGoimport)
         cwindow
     endif
 
-    " restore our undo history
-    silent! exe 'rundo ' . tmpundofile
-    call delete(tmpundofile)
+    if g:go_fmt_experimental == 1
+        " restore our undo history
+        silent! exe 'rundo ' . tmpundofile
+        call delete(tmpundofile)
+    endif
 
     " restore our cursor/windows positions
     call delete(l:tmpname)
