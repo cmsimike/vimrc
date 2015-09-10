@@ -9,3 +9,6 @@ inoremap jj <Esc>
 imap <Esc> <Nop>
 
 set wildignore+=*.class
+
+let mapleader = " "
+let g:mapleader = " "
